@@ -9,17 +9,23 @@ const users = require('./json/users.json');
  * @return {Promise<{}>} A promise to the user.
  */
 const getUserWithEmail = function(email) {
-  let user;
-  for (const userId in users) {
-    user = users[userId];
-    if (user.email.toLowerCase() === email.toLowerCase()) {
-      break;
-    } else {
-      user = null;
-    }
-  }
-  return Promise.resolve(user);
-}
+  const queryString = `
+  SELECT *
+  FROM users
+  WHERE users.email = $1;
+  `
+  return pool.query(queryString, [email])
+    .then(res => {
+      if(res.rows) {
+        return res.rows[0];
+      } else {
+        return null;
+      }
+    })
+    .catch (err => {
+      console.log('query error:', err)
+    });
+};
 exports.getUserWithEmail = getUserWithEmail;
 
 /**
@@ -116,7 +122,7 @@ const getAllProperties = function(options, limit = 10) {
   FROM properties
   JOIN property_reviews ON properties.id = property_id
   `;
-   // 3 Check if a city has been passed in as an option. Add the city to the params array and create a WHERE clause for the city.
+    // 3 Check if a city, owner_id or price_per_night has been passed in as an option. Add them to the params array and create a WHERE clause
   if (options.city) {
     queryParams.push(`%${options.city}%`);
     queryString += `WHERE city LIKE $${queryParams.length} `;
@@ -173,9 +179,19 @@ exports.getAllProperties = getAllProperties;
  * @return {Promise<{}>} A promise to the property.
  */
 const addProperty = function(property) {
-  const propertyId = Object.keys(properties).length + 1;
-  property.id = propertyId;
-  properties[propertyId] = property;
-  return Promise.resolve(property);
+  const queryString = `
+  INSERT INTO properties (owner_id, title, description, thumbnail_photo_url, cover_photo_url, cost_per_night, parking_spaces, number_of_bathrooms, number_of_bedrooms, country, street, city, province, post_code)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+  RETURNING *;
+  `;
+  const values = [property.owner_id, property.title, property.description, property.thumbnail_photo_url, property.cover_photo_url, property.cost_per_night, property.parking_spaces, property.number_of_bathrooms, property.number_of_bedrooms, property.country, property.street, property.city, property.province, property.post_code];
+
+  return pool.query(queryString, values)
+    .then(res => {
+      return res.rows[0];
+    })
+    .catch(err => {
+      return console.log('query error:', err);
+    })
 }
 exports.addProperty = addProperty;
